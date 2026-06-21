@@ -17,12 +17,17 @@ export interface SystemData {
   loadAvg: [number, number, number];
 }
 
-export interface VpnData {
+export interface VpnStatus {
+  name: string;
+  label: string;
   connected: boolean;
-  interface?: string;
-  ip?: string;
-  externalIp?: string;
-  uptime?: number;
+  ip: string | null;
+  uptime: number | null;
+}
+
+export interface VpnData {
+  vpns: VpnStatus[];
+  externalIp: string | null;
 }
 
 export interface Torrent {
