@@ -16,7 +16,13 @@ function cpuTempColor(temp: number): string {
   return 'text-red-400';
 }
 
-function Bar({ value, label, color }: { value: number; label: string; color: string }) {
+function barGradient(value: number): string {
+  if (value < 50) return 'linear-gradient(90deg, #22c55e, #eab308)';
+  if (value < 80) return 'linear-gradient(90deg, #22c55e, #eab308, #ef4444)';
+  return 'linear-gradient(90deg, #eab308, #ef4444)';
+}
+
+function Bar({ value, label }: { value: number; label: string }) {
   return (
     <div className="mb-2">
       <div className="flex justify-between text-xs text-gray-400 mb-1">
@@ -25,8 +31,11 @@ function Bar({ value, label, color }: { value: number; label: string; color: str
       </div>
       <div className="w-full bg-gray-700 rounded-full h-2">
         <div
-          className={`h-2 rounded-full ${color} transition-all duration-700`}
-          style={{ width: `${Math.min(value, 100)}%` }}
+          className="h-2 rounded-full transition-all duration-700"
+          style={{
+            width: `${Math.min(value, 100)}%`,
+            background: barGradient(value),
+          }}
         />
       </div>
     </div>
@@ -46,9 +55,9 @@ export default function SystemWidget() {
               {data.cpuTemp.toFixed(1)}°C
             </span>
           </div>
-          <Bar value={data.cpuUsage} label="CPU" color={data.cpuUsage > 80 ? 'bg-red-500' : data.cpuUsage > 50 ? 'bg-yellow-500' : 'bg-green-500'} />
-          <Bar value={data.memory.percent} label="Memory" color={data.memory.percent > 80 ? 'bg-red-500' : data.memory.percent > 50 ? 'bg-yellow-500' : 'bg-green-500'} />
-          <Bar value={data.disk.percent} label="Disk" color={data.disk.percent > 80 ? 'bg-red-500' : data.disk.percent > 50 ? 'bg-yellow-500' : 'bg-green-500'} />
+          <Bar value={data.cpuUsage} label="CPU" />
+          <Bar value={data.memory.percent} label="Memory" />
+          <Bar value={data.disk.percent} label="Disk" />
           <div className="flex justify-between text-xs text-gray-400 mt-3">
             <span>Uptime: {formatUptime(data.uptime)}</span>
             <span>Load: {data.loadAvg.map(v => v.toFixed(1)).join(' / ')}</span>

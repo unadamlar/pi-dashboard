@@ -10,7 +10,7 @@ interface WidgetProps {
 
 export default function Widget({ title, icon, isLoading, error, children }: WidgetProps) {
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 flex flex-col">
+    <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 flex flex-col hover:border-gray-600 transition-all duration-300 widget-fade-in">
       <div className="flex items-center gap-2 mb-3">
         <span className="text-lg">{icon}</span>
         <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">{title}</h2>

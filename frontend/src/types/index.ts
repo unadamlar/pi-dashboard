@@ -79,3 +79,18 @@ export interface WeatherData {
   };
   forecast: WeatherForecast[];
 }
+
+export interface AnimeItem {
+  title: string;
+  score: number;
+  episodes: number;
+  nextEpisode: number | null;
+  airingAt: string | null;
+  timeUntilAiring: number | null;
+  genres: string[];
+  coverColor: string | null;
+}
+
+export interface AnimeData {
+  anime: AnimeItem[];
+}
