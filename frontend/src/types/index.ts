@@ -74,7 +74,8 @@ export interface WeatherForecast {
   icon: string;
 }
 
-export interface WeatherData {
+export interface CityWeather {
+  name: string;
   current: {
     temp: number;
     humidity: number;
@@ -83,6 +84,10 @@ export interface WeatherData {
     windSpeed: number;
   };
   forecast: WeatherForecast[];
+}
+
+export interface WeatherData {
+  cities: CityWeather[];
 }
 
 export interface AnimeItem {

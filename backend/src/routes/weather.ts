@@ -33,47 +33,34 @@ const WMO_CODES: Record<number, { description: string; icon: string }> = {
   99: { description: 'Thunderstorm with hail', icon: '⛈️' },
 };
 
+const CITIES = [
+  { name: 'Helsinki', lat: 60.17, lon: 24.95, tz: 'Europe/Helsinki' },
+  { name: 'Istanbul', lat: 41.01, lon: 28.98, tz: 'Europe/Istanbul' },
+];
+
 function getWeatherInfo(code: number): { description: string; icon: string } {
   return WMO_CODES[code] || { description: 'Unknown', icon: '❓' };
 }
 
-weatherRouter.get('/', async (_req, res) => {
-  try {
-    const url = 'https://api.open-meteo.com/v1/forecast?latitude=60.17&longitude=24.95&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=Europe/Helsinki&forecast_days=3';
-    const response = await fetch(url);
+async function fetchCityWeather(city: typeof CITIES[0]) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=${encodeURIComponent(city.tz)}&forecast_days=3`;
+  const response = await fetch(url);
+  if (!response.ok) return null;
 
-    if (!response.ok) {
-      res.status(502).json({ error: 'Weather API unavailable' });
-      return;
-    }
+  const data = await response.json() as any;
+  const currentCode = data.current?.weather_code ?? 0;
+  const currentInfo = getWeatherInfo(currentCode);
 
-    const data = await response.json() as {
-      current?: {
-        weather_code: number;
-        temperature_2m: number;
-        relative_humidity_2m: number;
-        wind_speed_10m: number;
-      };
-      daily?: {
-        time: string[];
-        weather_code: number[];
-        temperature_2m_max: number[];
-        temperature_2m_min: number[];
-      };
-    };
-
-    const currentCode = data.current?.weather_code ?? 0;
-    const currentInfo = getWeatherInfo(currentCode);
-
-    const current = {
+  return {
+    name: city.name,
+    current: {
       temp: data.current?.temperature_2m ?? 0,
       humidity: data.current?.relative_humidity_2m ?? 0,
       description: currentInfo.description,
       icon: currentInfo.icon,
       windSpeed: data.current?.wind_speed_10m ?? 0,
-    };
-
-    const forecast = (data.daily?.time || []).map((date: string, i: number) => {
+    },
+    forecast: (data.daily?.time || []).map((date: string, i: number) => {
       const code = data.daily?.weather_code?.[i] ?? 0;
       const info = getWeatherInfo(code);
       return {
@@ -83,9 +70,21 @@ weatherRouter.get('/', async (_req, res) => {
         description: info.description,
         icon: info.icon,
       };
-    });
+    }),
+  };
+}
 
-    res.json({ current, forecast });
+weatherRouter.get('/', async (_req, res) => {
+  try {
+    const results = await Promise.all(CITIES.map(fetchCityWeather));
+    const cities = results.filter(r => r !== null);
+
+    if (cities.length === 0) {
+      res.status(502).json({ error: 'Weather API unavailable' });
+      return;
+    }
+
+    res.json({ cities });
   } catch {
     res.status(502).json({ error: 'Weather API unavailable' });
   }
