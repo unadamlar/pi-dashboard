@@ -10,32 +10,22 @@ function formatUptime(seconds: number): string {
   return `${d}d ${h}h ${m}m`;
 }
 
-function cpuTempColor(temp: number): string {
-  if (temp < 50) return 'text-green-400';
-  if (temp < 70) return 'text-yellow-400';
-  return 'text-red-400';
-}
-
-function barGradient(value: number): string {
-  if (value < 50) return 'linear-gradient(90deg, #22c55e, #eab308)';
-  if (value < 80) return 'linear-gradient(90deg, #22c55e, #eab308, #ef4444)';
-  return 'linear-gradient(90deg, #eab308, #ef4444)';
-}
-
 function Bar({ value, label }: { value: number; label: string }) {
+  const color =
+    value < 50 ? 'from-green-500 to-green-400' :
+    value < 75 ? 'from-yellow-500 to-yellow-400' :
+    'from-red-500 to-red-400';
+
   return (
-    <div className="mb-2">
-      <div className="flex justify-between text-xs text-gray-400 mb-1">
+    <div className="mb-1.5">
+      <div className="flex justify-between text-xs text-gray-400 mb-0.5">
         <span>{label}</span>
-        <span>{value.toFixed(1)}%</span>
+        <span>{value}%</span>
       </div>
       <div className="w-full bg-gray-700 rounded-full h-2">
         <div
-          className="h-2 rounded-full transition-all duration-700"
-          style={{
-            width: `${Math.min(value, 100)}%`,
-            background: barGradient(value),
-          }}
+          className={`h-2 rounded-full bg-gradient-to-r ${color} transition-all duration-500`}
+          style={{ width: `${Math.min(value, 100)}%` }}
         />
       </div>
     </div>
@@ -47,23 +37,39 @@ export default function SystemWidget() {
 
   return (
     <Widget title="System" icon="🖥️" isLoading={isLoading} error={error}>
-      {data && (
-        <div className="space-y-1">
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-xs text-gray-400">CPU Temp</span>
-            <span className={`text-xl font-bold ${cpuTempColor(data.cpuTemp)}`}>
-              {data.cpuTemp.toFixed(1)}°C
+      {data && (() => {
+        const sys = data;
+        return (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`text-lg ${sys.cpuTemp >= 70 ? 'text-red-400' : sys.cpuTemp >= 50 ? 'text-yellow-400' : 'text-green-400'}`}>
+              🌡️
+            </span>
+            <span className={`font-semibold ${sys.cpuTemp >= 70 ? 'text-red-400' : sys.cpuTemp >= 50 ? 'text-yellow-400' : 'text-green-400'}`}>
+              {sys.cpuTemp.toFixed(1)}°C
             </span>
           </div>
-          <Bar value={data.cpuUsage} label="CPU" />
-          <Bar value={data.memory.percent} label="Memory" />
-          <Bar value={data.disk.percent} label="Disk" />
-          <div className="flex justify-between text-xs text-gray-400 mt-3">
-            <span>Uptime: {formatUptime(data.uptime)}</span>
-            <span>Load: {data.loadAvg.map(v => v.toFixed(1)).join(' / ')}</span>
+          <Bar value={sys.cpuUsage} label="CPU" />
+          <Bar value={sys.memory.percent} label="Memory" />
+          <Bar value={sys.disk.percent} label="Disk" />
+          <div className="flex justify-between text-xs text-gray-500 pt-1 border-t border-gray-700/50">
+            <span>{formatUptime(sys.uptime)}</span>
+            <span>{sys.loadAvg[0].toFixed(1)} / {sys.loadAvg[1].toFixed(1)} / {sys.loadAvg[2].toFixed(1)}</span>
           </div>
+          {sys.topProcesses && sys.topProcesses.length > 0 && (
+            <div className="pt-2 mt-1 border-t border-gray-700/50">
+              <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1.5">Top Processes</div>
+              {sys.topProcesses.map((p, i) => (
+                <div key={i} className="flex justify-between text-[11px] font-mono py-0.5">
+                  <span className="text-gray-400 truncate max-w-[65%]" title={p.command}>{p.command}</span>
+                  <span className="text-gray-500">{p.cpu.toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+        );
+      })()}
     </Widget>
   );
 }

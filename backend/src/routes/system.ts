@@ -118,15 +118,46 @@ async function getLoadAvg(): Promise<[number, number, number]> {
   }
 }
 
+interface ProcessInfo {
+  pid: number;
+  cpu: number;
+  mem: number;
+  command: string;
+}
+
+function getTopProcesses(): Promise<ProcessInfo[]> {
+  return new Promise((resolve) => {
+    exec('ps aux --sort=-%cpu 2>/dev/null | head -6 | tail -5', (err, stdout) => {
+      if (err || !stdout.trim()) { resolve([]); return; }
+      const lines = stdout.trim().split('\n');
+      const procs: ProcessInfo[] = [];
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 11) {
+          const cmd = parts.slice(10).join(' ').substring(0, 50);
+          procs.push({
+            pid: parseInt(parts[1], 10),
+            cpu: parseFloat(parts[2]),
+            mem: parseFloat(parts[3]),
+            command: cmd,
+          });
+        }
+      }
+      resolve(procs);
+    });
+  });
+}
+
 systemRouter.get('/', async (_req, res) => {
   try {
-    const [cpuTemp, cpuUsage, memory, disk, uptime, loadAvg] = await Promise.all([
+    const [cpuTemp, cpuUsage, memory, disk, uptime, loadAvg, topProcesses] = await Promise.all([
       getCpuTemp(),
       getCpuUsage(),
       getMemory(),
       getDisk(),
       getUptime(),
       getLoadAvg(),
+      getTopProcesses(),
     ]);
 
     res.json({
@@ -136,6 +167,7 @@ systemRouter.get('/', async (_req, res) => {
       disk,
       uptime,
       loadAvg,
+      topProcesses,
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to get system info' });

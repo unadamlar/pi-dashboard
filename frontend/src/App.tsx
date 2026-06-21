@@ -6,6 +6,7 @@ import TorrentWidget from './components/TorrentWidget';
 import TailscaleWidget from './components/TailscaleWidget';
 import WeatherWidget from './components/WeatherWidget';
 import AnimeWidget from './components/AnimeWidget';
+import HermesWidget from './components/HermesWidget';
 import QuickLinksWidget from './components/QuickLinksWidget';
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
       <TorrentWidget />
       <TailscaleWidget />
       <AnimeWidget />
+      <HermesWidget />
       <div className="md:col-span-2 xl:col-span-3">
         <QuickLinksWidget />
       </div>

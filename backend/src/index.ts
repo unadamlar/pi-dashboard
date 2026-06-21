@@ -7,6 +7,7 @@ import { torrentsRouter } from './routes/torrents';
 import { tailscaleRouter } from './routes/tailscale';
 import { weatherRouter } from './routes/weather';
 import { animeRouter } from './routes/anime';
+import { hermesRouter } from './routes/hermes';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -21,6 +22,7 @@ app.use('/api/torrents', torrentsRouter);
 app.use('/api/tailscale', tailscaleRouter);
 app.use('/api/weather', weatherRouter);
 app.use('/api/anime', animeRouter);
+app.use('/api/hermes', hermesRouter);
 
 // Serve built frontend in production
 const frontendDist = path.join(__dirname, '../../frontend/dist');

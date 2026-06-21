@@ -10,9 +10,9 @@ interface QuickLink {
 
 const links: QuickLink[] = [
   { name: 'qBittorrent', url: 'http://pi:8080', icon: '📥' },
-  { name: 'RustDesk', url: null, icon: '🖥️', description: 'Self-hosted — connect via RustDesk client' },
+  { name: 'RustDesk', url: 'rustdesk://128591198', icon: '🖥️', description: 'ID: 128591198' },
   { name: 'Tailscale Admin', url: 'https://login.tailscale.com/admin/machines', icon: '🔗' },
-  { name: 'Hermes Dashboard', url: 'http://pi:8081', icon: '📊' },
+  { name: 'Hermes Dashboard', url: 'http://pi:9119', icon: '📊' },
   { name: 'Pi Connect', url: 'https://connect.raspberrypi.org', icon: '🥧' },
   { name: 'Open-Meteo', url: 'https://open-meteo.com', icon: '🌤️' },
 ];

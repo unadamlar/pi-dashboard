@@ -1,3 +1,10 @@
+export interface ProcessInfo {
+  pid: number;
+  cpu: number;
+  mem: number;
+  command: string;
+}
+
 export interface SystemData {
   cpuTemp: number;
   cpuUsage: number;
@@ -15,6 +22,7 @@ export interface SystemData {
   };
   uptime: number;
   loadAvg: [number, number, number];
+  topProcesses: ProcessInfo[];
 }
 
 export interface VpnStatus {
