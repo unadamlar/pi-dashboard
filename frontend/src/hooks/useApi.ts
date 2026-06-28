@@ -4,6 +4,7 @@ interface UseApiResult<T> {
   data: T | null;
   isLoading: boolean;
   error: string | null;
+  refetch: () => void;
 }
 
 export function useApi<T>(url: string, intervalMs: number = 5000): UseApiResult<T> {
@@ -27,11 +28,15 @@ export function useApi<T>(url: string, intervalMs: number = 5000): UseApiResult<
     }
   }, [url]);
 
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
+
   useEffect(() => {
     fetchData();
     const id = setInterval(fetchData, intervalMs);
     return () => clearInterval(id);
   }, [fetchData, intervalMs]);
 
-  return { data, isLoading, error };
+  return { data, isLoading, error, refetch };
 }

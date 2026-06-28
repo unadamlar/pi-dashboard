@@ -27,8 +27,8 @@ export interface SystemData {
 
 export interface VpnStatus {
   name: string;
-  label: string;
   connected: boolean;
+  device: string | null;
   ip: string | null;
   uptime: number | null;
 }
@@ -54,6 +54,7 @@ export interface TorrentsData {
   totalDownloadSpeed: number;
   totalUploadSpeed: number;
   torrents: Torrent[];
+  reachable: boolean;
 }
 
 export interface TailscalePeer {

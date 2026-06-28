@@ -3,77 +3,92 @@ import { exec } from 'child_process';
 
 export const vpnRouter = Router();
 
-interface VpnInfo {
+interface VpnEntry {
   name: string;
-  label: string;
-  config: string;
-  interface: string;
+  connected: boolean;
+  device: string | null;
+  ip: string | null;
+  uptime: number | null;  // seconds since activation, null if disconnected
 }
-
-const VPNS: VpnInfo[] = [
-  { name: 'CG-FI', label: 'Finland', config: '/etc/openvpn/client/CG_FI.conf', interface: 'tun0' },
-  { name: 'CG-TR', label: 'Turkey', config: '/etc/openvpn/tr_openvpn.ovpn', interface: 'tun1' },
-];
 
 function execCmd(cmd: string, timeout = 10000): Promise<string> {
   return new Promise((resolve) => {
-    exec(cmd, { timeout }, (err, stdout) => {
-      if (err) { resolve(''); return; }
-      resolve(stdout.trim());
+    exec(cmd, { timeout }, (err, stdout, stderr) => {
+      // nmcli sends status output to stderr, not stdout — combine both
+      const output = [stdout, stderr].filter(s => s.trim()).join('\n').trim();
+      resolve(output);
     });
   });
 }
 
-async function getVpnStatus(vpn: VpnInfo): Promise<{
-  name: string;
-  label: string;
-  connected: boolean;
-  ip: string | null;
-  uptime: number | null;
-}> {
-  // Check if the openvpn process is running with this config
-  const procCheck = await execCmd(`pgrep -f "openvpn.*${vpn.config.replace(/\//g, '\\/')}"`);
-  if (!procCheck) {
-    return { name: vpn.name, label: vpn.label, connected: false, ip: null, uptime: null };
+/**
+ * Discover all VPN connections from NetworkManager — exactly how the Pi OS GUI works.
+ */
+async function discoverVpns(): Promise<string[]> {
+  const output = await execCmd('nmcli -t -f NAME,TYPE connection show 2>/dev/null');
+  if (!output) return [];
+  return output
+    .split('\n')
+    .filter(line => line.endsWith(':vpn'))
+    .map(line => line.replace(/:vpn$/, ''))
+    .filter(Boolean);
+}
+
+/**
+ * Get the status of a single VPN connection via NetworkManager.
+ * Parses the full terse output — nmcli -f with dotted field names doesn't
+ * work with -t mode, so we parse the unfiltered key:value lines.
+ */
+async function getVpnStatus(name: string): Promise<VpnEntry> {
+  const show = await execCmd(`nmcli -t connection show "${name}" 2>/dev/null`);
+  if (!show) {
+    return { name, connected: false, device: null, ip: null, uptime: null };
   }
 
-  const pid = procCheck.split('\n')[0];
+  const lines = show.split('\n');
 
-  // Get IP from the expected tun interface or any tun
-  const tunOutput = await execCmd(`ip addr show ${vpn.interface} 2>/dev/null`);
+  // Check if activated
+  const stateLine = lines.find(l => l.startsWith('GENERAL.STATE:'));
+  const state = stateLine?.split(':').slice(1).join(':') || '';
+  if (state !== 'activated') {
+    return { name, connected: false, device: null, ip: null, uptime: null };
+  }
+
+  // Device (e.g., wlan0 for VPN tunnelled over wifi, or tun0)
+  const deviceLine = lines.find(l => l.startsWith('GENERAL.DEVICES:'));
+  const device = deviceLine?.replace('GENERAL.DEVICES:', '') || null;
+
+  // IP4.ADDRESS[1]:10.8.4.96/24 → strip CIDR suffix
   let ip: string | null = null;
-  if (tunOutput) {
-    const ipMatch = tunOutput.match(/inet (\d+\.\d+\.\d+\.\d+)/);
+  const ip4Line = lines.find(l => l.startsWith('IP4.ADDRESS[1]:'));
+  if (ip4Line) {
+    const ipPart = ip4Line.replace('IP4.ADDRESS[1]:', '');
+    const ipMatch = ipPart.match(/^(\d+\.\d+\.\d+\.\d+)/);
     ip = ipMatch ? ipMatch[1] : null;
   }
 
-  // If not on expected interface, try any tun
-  if (!ip) {
-    const anyTun = await execCmd("ip -4 addr show tun* 2>/dev/null | grep inet");
-    if (anyTun) {
-      const ipMatch = anyTun.match(/inet (\d+\.\d+\.\d+\.\d+)/);
-      ip = ipMatch ? ipMatch[1] : null;
+  // Uptime from connection.timestamp (Unix seconds since epoch)
+  let uptime: number | null = null;
+  const tsLine = lines.find(l => l.startsWith('connection.timestamp:'));
+  if (tsLine) {
+    const ts = parseInt(tsLine.split(':')[1], 10);
+    if (ts && ts > 0) {
+      uptime = Math.floor(Date.now() / 1000) - ts;
     }
   }
 
-  // Get uptime
-  let uptime: number | null = null;
-  const etimeOutput = await execCmd(`ps -o etimes= -p ${pid}`);
-  if (etimeOutput) {
-    uptime = parseInt(etimeOutput, 10) || null;
-  }
-
-  return { name: vpn.name, label: vpn.label, connected: true, ip, uptime };
+  return { name, connected: true, device, ip, uptime };
 }
 
-// GET /api/vpn — status for all VPNs
+// GET /api/vpn — status for all VPN connections
 vpnRouter.get('/', async (_req, res) => {
   try {
-    const results = await Promise.all(VPNS.map(getVpnStatus));
+    const vpnNames = await discoverVpns();
+    const vpns = await Promise.all(vpnNames.map(getVpnStatus));
 
-    // Get external IP from any connected VPN
+    // External IP: check if any VPN is connected, then curl ifconfig.me
     let externalIp: string | null = null;
-    const connected = results.filter(r => r.connected);
+    const connected = vpns.filter(v => v.connected);
     if (connected.length > 0) {
       const extOutput = await execCmd('curl -s --max-time 5 ifconfig.me 2>/dev/null');
       if (extOutput && /^\d+\.\d+\.\d+\.\d+$/.test(extOutput)) {
@@ -81,67 +96,69 @@ vpnRouter.get('/', async (_req, res) => {
       }
     }
 
-    res.json({ vpns: results, externalIp });
+    res.json({ vpns, externalIp });
   } catch {
-    res.json({ vpns: VPNS.map(v => ({ name: v.name, label: v.label, connected: false, ip: null, uptime: null })), externalIp: null });
+    res.json({ vpns: [], externalIp: null });
   }
 });
 
-// POST /api/vpn/connect — start a VPN
+// POST /api/vpn/connect — connect a VPN via NetworkManager
 vpnRouter.post('/connect', async (req, res) => {
   try {
     const { name } = req.body;
-    const vpn = VPNS.find(v => v.name === name);
-    if (!vpn) {
-      res.status(400).json({ success: false, message: `Unknown VPN: ${name}` });
+    if (!name || typeof name !== 'string') {
+      res.status(400).json({ success: false, message: 'VPN name is required' });
       return;
     }
 
     // Check if already connected
-    const status = await getVpnStatus(vpn);
+    const status = await getVpnStatus(name);
     if (status.connected) {
-      res.json({ success: true, message: `${vpn.label} VPN is already connected` });
+      res.json({ success: true, message: `${name} is already connected` });
       return;
     }
 
-    const logFile = `/tmp/openvpn-${vpn.name.toLowerCase()}.log`;
-    await execCmd(`sudo openvpn --config ${vpn.config} --daemon --log ${logFile} 2>&1`);
+    // Connect via nmcli — same way the Pi OS GUI does it
+    const output = await execCmd(`nmcli connection up "${name}" 2>&1`, 30000);
 
-    // Wait a moment, then verify
+    // Wait a moment for the connection to establish
     await new Promise(r => setTimeout(r, 2000));
-    const verify = await getVpnStatus(vpn);
+
+    // Verify
+    const verify = await getVpnStatus(name);
     if (verify.connected) {
-      res.json({ success: true, message: `${vpn.label} VPN connected` });
+      res.json({ success: true, message: `${name} connected` });
     } else {
-      const logOutput = await execCmd(`tail -20 ${logFile} 2>/dev/null`);
-      res.json({ success: false, message: `Failed to connect ${vpn.label} VPN`, details: logOutput || 'Check logs' });
+      res.json({
+        success: false,
+        message: `Failed to connect ${name}`,
+        details: output || 'No output from nmcli',
+      });
     }
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// POST /api/vpn/disconnect — stop a VPN
+// POST /api/vpn/disconnect — disconnect a VPN via NetworkManager
 vpnRouter.post('/disconnect', async (req, res) => {
   try {
     const { name } = req.body;
-    const vpn = VPNS.find(v => v.name === name);
-    if (!vpn) {
-      res.status(400).json({ success: false, message: `Unknown VPN: ${name}` });
+    if (!name || typeof name !== 'string') {
+      res.status(400).json({ success: false, message: 'VPN name is required' });
       return;
     }
 
-    // Find and kill the specific process
-    const pids = await execCmd(`pgrep -f "openvpn.*${vpn.config.replace(/\//g, '\\/')}"`);
-    if (!pids) {
-      res.json({ success: true, message: `${vpn.label} VPN is not connected` });
+    const status = await getVpnStatus(name);
+    if (!status.connected) {
+      res.json({ success: true, message: `${name} is not connected` });
       return;
     }
 
-    await execCmd(`sudo kill ${pids.split('\n')[0]} 2>/dev/null`);
+    await execCmd(`nmcli connection down "${name}" 2>&1`, 15000);
     await new Promise(r => setTimeout(r, 1000));
 
-    res.json({ success: true, message: `${vpn.label} VPN disconnected` });
+    res.json({ success: true, message: `${name} disconnected` });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }

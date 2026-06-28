@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import type { TorrentsData } from '../types';
 import Widget from './Widget';
@@ -53,12 +53,139 @@ const stateLabels: Record<string, string> = {
   checkingDL: 'Checking',
 };
 
+type AddStatus = 'idle' | 'adding' | 'success' | 'error';
+
+function AddTorrentForm({ onAdded }: { onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [urls, setUrls] = useState('');
+  const [category, setCategory] = useState('');
+  const [paused, setPaused] = useState(false);
+  const [status, setStatus] = useState<AddStatus>('idle');
+  const [message, setMessage] = useState('');
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full mb-2 py-1.5 px-2 text-xs font-medium text-blue-300 border border-dashed border-gray-600 rounded hover:border-blue-500 hover:text-blue-200 transition-colors"
+      >
+        + Add torrent
+      </button>
+    );
+  }
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!urls.trim()) return;
+    setStatus('adding');
+    setMessage('');
+    try {
+      const res = await fetch('/api/torrents/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls, category: category || undefined, paused }),
+      });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        setStatus('success');
+        setMessage('Added');
+        setUrls('');
+        setCategory('');
+        setPaused(false);
+        onAdded();
+        setTimeout(() => {
+          setStatus('idle');
+          setMessage('');
+        }, 2500);
+      } else {
+        setStatus('error');
+        setMessage(json.error || `HTTP ${res.status}`);
+      }
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Request failed');
+    }
+  };
+
+  const buttonLabel =
+    status === 'adding' ? 'Adding\u2026' : status === 'success' ? 'Added!' : 'Add';
+  const buttonClass =
+    status === 'success'
+      ? 'bg-green-600 hover:bg-green-600'
+      : status === 'error'
+        ? 'bg-red-600 hover:bg-red-500'
+        : 'bg-blue-600 hover:bg-blue-500';
+
+  return (
+    <form onSubmit={submit} className="mb-3 p-2 rounded bg-gray-800/60 border border-gray-700 space-y-2">
+      <textarea
+        value={urls}
+        onChange={(e) => setUrls(e.target.value)}
+        placeholder="magnet:?xt=... or https://.../file.torrent (one per line)"
+        rows={2}
+        className="w-full text-xs bg-gray-900 text-gray-100 placeholder-gray-500 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500 resize-none"
+        autoFocus
+        spellCheck={false}
+      />
+      <div className="flex gap-2">
+        <input
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          placeholder="category (optional)"
+          className="flex-1 text-xs bg-gray-900 text-gray-100 placeholder-gray-500 border border-gray-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500"
+          spellCheck={false}
+        />
+        <label className="flex items-center gap-1 text-xs text-gray-400 select-none">
+          <input
+            type="checkbox"
+            checked={paused}
+            onChange={(e) => setPaused(e.target.checked)}
+            className="accent-blue-500"
+          />
+          Paused
+        </label>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={status === 'adding' || !urls.trim()}
+          className={`flex-1 py-1.5 text-xs font-medium text-white rounded transition-colors disabled:opacity-50 ${buttonClass}`}
+        >
+          {buttonLabel}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setStatus('idle');
+            setMessage('');
+          }}
+          className="px-3 text-xs text-gray-400 hover:text-gray-200"
+        >
+          Cancel
+        </button>
+      </div>
+      {status === 'error' && message && (
+        <p className="text-xs text-red-400 truncate" title={message}>
+          {message}
+        </p>
+      )}
+    </form>
+  );
+}
+
 export default function TorrentWidget() {
-  const { data, isLoading, error } = useApi<TorrentsData>('/api/torrents', 5000);
+  const { data, isLoading, error, refetch } = useApi<TorrentsData>('/api/torrents', 5000);
 
   return (
     <Widget title="Torrents" icon="📥" isLoading={isLoading} error={error}>
-      {data && (
+      <AddTorrentForm onAdded={refetch} />
+      {data && !data.reachable && (
+        <div className="mb-2 p-2 rounded bg-amber-900/40 border border-amber-600/50 text-xs text-amber-300">
+          ⚠️ qBittorrent unreachable — is it running on port 8080?
+        </div>
+      )}
+      {data && data.reachable && (
         <div>
           {data.total === 0 ? (
             <p className="text-gray-500 text-sm">No active torrents</p>

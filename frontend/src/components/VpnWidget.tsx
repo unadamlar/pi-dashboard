@@ -10,9 +10,8 @@ function formatVpnUptime(seconds: number | null): string {
   return `${h}h ${m}m`;
 }
 
-function VpnRow({ name, label, connected, ip, uptime, onConnect, onDisconnect, loading }: {
+function VpnRow({ name, connected, ip, uptime, onConnect, onDisconnect, loading }: {
   name: string;
-  label: string;
   connected: boolean;
   ip: string | null;
   uptime: number | null;
@@ -25,8 +24,7 @@ function VpnRow({ name, label, connected, ip, uptime, onConnect, onDisconnect, l
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-          <span className="font-medium text-sm">{label}</span>
-          <span className="text-xs text-gray-500 font-mono">({name})</span>
+          <span className="font-medium text-sm">{name}</span>
         </div>
         <button
           onClick={connected ? onDisconnect : onConnect}
@@ -94,12 +92,18 @@ export default function VpnWidget() {
           {data.vpns.map((vpn) => (
             <VpnRow
               key={vpn.name}
-              {...vpn}
+              name={vpn.name}
+              connected={vpn.connected}
+              ip={vpn.ip}
+              uptime={vpn.uptime}
               onConnect={() => handleConnect(vpn.name)}
               onDisconnect={() => handleDisconnect(vpn.name)}
               loading={loading}
             />
           ))}
+          {data.vpns.length === 0 && (
+            <div className="text-xs text-gray-500 italic">No VPN connections configured</div>
+          )}
           {data.externalIp && (
             <div className="flex justify-between text-xs text-gray-500 pt-1 border-t border-gray-700/50">
               <span>External IP:</span>
